@@ -1,0 +1,105 @@
+name: ARM64 Build
+
+on:
+  push:
+    branches:
+      - arm64-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-build:
+    name: Build ARM64 packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    env:
+      DENIAL_ARCH: aarch64
+      DENIAL_FLUTTER_ARCH: arm64
+      DENIAL_FLUTTER_PLATFORM: linux-arm64
+      DENIAL_BUILD_JOBS: 6
+      TARGET_SYSROOT: /usr/aarch64-linux-gnu
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            git curl jq file rsync gpg make cmake ninja-build pkg-config \
+            libdbus-1-dev libgtk-3-dev libinput-dev libudev-dev \
+            libdrm-dev libgbm-dev libegl-dev libxkbcommon-dev \
+            libpulse-dev libfontconfig1-dev libfreetype6-dev \
+            libseat-dev libsystemd-dev zstd libbsd-dev \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            qemu-user-static binfmt-support python3-venv python3-dev \
+            libc6-dev-arm64-cross linux-libc-dev-arm64-cross \
+            libgles2-mesa-dev-arm64-cross
+
+      - name: Register QEMU binfmt
+        run: |
+          sudo systemctl restart systemd-binfmt || true
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 2>/dev/null || true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+          components: clippy, rustfmt
+
+      - name: Configure Cargo for cross-compilation
+        run: |
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml << 'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+          EOF
+
+      - name: Set up depot_tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
+            "$HOME/depot_tools"
+          echo "$HOME/depot_tools" >> "$GITHUB_PATH"
+
+      - name: Bootstrap Denial
+        run: |
+          ./tools/denial-pc bootstrap
+
+      - name: Build Flutter engine for ARM64
+        env:
+          DENIAL_FLUTTER_ENGINE_JOBS: 6
+        run: |
+          ./tools/denial-flutter-engine build
+
+      - name: Build Denial
+        run: |
+          ./tools/denial-pc build
+
+      - name: Patch PKGBUILD for aarch64
+        run: |
+          sed -i "s/arch=('x86_64')/arch=('aarch64')/" packaging/arch/PKGBUILD
+          sed -i "s|linux/x64/release|linux/arm64/release|g" packaging/arch/PKGBUILD
+          sed -i "s/arch=('x86_64')/arch=('aarch64')/" packaging/arch/flutter-engine/PKGBUILD
+          sed -i "s|linux-x64-release|linux-arm64-release|g" packaging/arch/flutter-engine/PKGBUILD
+
+      - name: Build Arch packages
+        run: |
+          ./tools/denial-pc arch-package
+
+      - name: Verify packages
+        run: |
+          ls -la ~/.cache/denial/pc-build/packages/
+          file ~/.cache/denial/pc-build/packages/*.pkg.tar.zst || true
+          bsdtar -tf ~/.cache/denial/pc-build/packages/*.pkg.tar.zst | head -20 || true
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: denial-arm64-packages
+          path: ~/.cache/denial/pc-build/packages/*.pkg.tar.zst
+          retention-days: 14
