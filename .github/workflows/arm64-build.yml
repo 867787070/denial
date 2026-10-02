@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            git curl jq file rsync gpg make cmake ninja-build pkg-config \
+            git curl jq file rsync gpg make cmake ninja-build pkg-config g++ \
             libdbus-1-dev libgtk-3-dev libinput-dev libudev-dev \
             libdrm-dev libgbm-dev libegl-dev libxkbcommon-dev \
             libpulse-dev libfontconfig1-dev libfreetype6-dev \
@@ -48,12 +48,6 @@ jobs:
           [target.aarch64-unknown-linux-gnu]
           linker = "aarch64-linux-gnu-gcc"
           EOF
-
-      - name: Set up depot_tools
-        run: |
-          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
-            "$HOME/depot_tools"
-          echo "$HOME/depot_tools" >> "$GITHUB_PATH"
 
       - name: Bootstrap Denial
         run: |
