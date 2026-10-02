@@ -49,6 +49,18 @@ jobs:
           linker = "aarch64-linux-gnu-gcc"
           EOF
 
+      - name: Restore engine and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/denial
+            dart_shell/.dart_tool
+            dart_shell/build
+            settings_app/.dart_tool
+            settings_app/build
+          key: denial-arm64-${{ github.sha }}
+          restore-keys: denial-arm64-
+
       - name: Bootstrap Denial
         run: |
           ./tools/denial-pc bootstrap
@@ -69,15 +81,9 @@ jobs:
           ./tools/denial-pc build
 
       - name: Build Debian packages
-        run: |
-          ./tools/denial-pc debian-package
-          # package-denial-deb hardcodes _amd64 in the output filename even though
-          # dpkg-deb records the real Architecture in DEBIAN/control. Rename so the
-          # artifacts match their actual architecture.
-          for deb in ~/.cache/denial/pc-build/packages/*_amd64.deb; do
-            mv -- "$deb" "${deb%_amd64.deb}_arm64.deb"
-          done
-          ls -la ~/.cache/denial/pc-build/packages/
+        run: ./tools/build-arm64-deb
+        env:
+          DEB_VERSION: 0.0.0
 
       - name: Verify packages
         run: |
