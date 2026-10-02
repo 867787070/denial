@@ -12,21 +12,20 @@ permissions:
 jobs:
   arm64-build:
     name: Build ARM64 packages
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
 
     env:
       DENIAL_ARCH: aarch64
       DENIAL_FLUTTER_ARCH: arm64
       DENIAL_FLUTTER_PLATFORM: linux-arm64
       DENIAL_BUILD_JOBS: 6
-      TARGET_SYSROOT: /usr/aarch64-linux-gnu
 
     steps:
       - name: Check out the commit
         uses: actions/checkout@v4
 
-      - name: Install cross-compilation toolchain
+      - name: Install build dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -34,16 +33,7 @@ jobs:
             libdbus-1-dev libgtk-3-dev libinput-dev libudev-dev \
             libdrm-dev libgbm-dev libegl-dev libxkbcommon-dev \
             libpulse-dev libfontconfig1-dev libfreetype6-dev \
-            libseat-dev libsystemd-dev zstd libbsd-dev \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            qemu-user-static binfmt-support python3-venv python3-dev \
-            libc6-dev-arm64-cross linux-libc-dev-arm64-cross \
-            libgl1-mesa-dev libgles2-mesa-dev
-
-      - name: Register QEMU binfmt
-        run: |
-          sudo systemctl restart systemd-binfmt || true
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes 2>/dev/null || true
+            libseat-dev libsystemd-dev zstd libbsd-dev
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -51,13 +41,12 @@ jobs:
           targets: aarch64-unknown-linux-gnu
           components: clippy, rustfmt
 
-      - name: Configure Cargo for cross-compilation
+      - name: Configure Cargo for ARM64
         run: |
           mkdir -p ~/.cargo
           cat > ~/.cargo/config.toml << 'EOF'
           [target.aarch64-unknown-linux-gnu]
           linker = "aarch64-linux-gnu-gcc"
-          rustflags = ["-C", "link-arg=-fuse-ld=lld"]
           EOF
 
       - name: Set up depot_tools
