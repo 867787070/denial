@@ -19,6 +19,7 @@ SHELL_BUNDLE="$ROOT/dart_shell/build/linux/${DENIAL_FLUTTER_ARCH:?}/release/bund
 SETTINGS_BUNDLE="$ROOT/settings_app/build/linux/${DENIAL_FLUTTER_ARCH:?}/release/bundle"
 VERSION="${DEB_VERSION:-0.0.0}"
 RELEASE="${DEB_RELEASE:-1}"
+PACKAGER="${DENIAL_PACKAGE_PACKAGER:-Doctor Logix <doctor.logix@gmail.com>}"
 
 fail() {
   printf 'build-arm64-deb: %s\n' "$1" >&2
@@ -188,10 +189,19 @@ for manual in denialctl deniald denial-session denial-portal; do
 done
 
 build_deb() {
-  local name="$1" root="$2" control="$3"
+  local name="$1" root="$2" control_body="$3"
   local out="$PACKAGE_ROOT/${name}_${VERSION}-${RELEASE}_arm64.deb"
+  local installed_size
   install -d -m 0755 "$root/DEBIAN"
-  printf '%s\n' "$control" >"$root/DEBIAN/control"
+  installed_size="$(du -sk --apparent-size "$root" | cut -f1)"
+  {
+    printf 'Package: %s\n' "$name"
+    printf 'Version: %s-%s\n' "$VERSION" "$RELEASE"
+    printf 'Architecture: arm64\n'
+    printf 'Maintainer: %s\n' "$PACKAGER"
+    printf 'Installed-Size: %s\n' "$installed_size"
+    printf '%s\n' "$control_body"
+  } >"$root/DEBIAN/control"
   find "$root/DEBIAN" -print0 \
     | xargs -0 touch --no-dereference --date="@${SOURCE_DATE_EPOCH:-0}"
   dpkg-deb --root-owner-group --uniform-compression -Zxz \
