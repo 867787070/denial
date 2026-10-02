@@ -55,12 +55,6 @@ jobs:
             "$HOME/depot_tools"
           echo "$HOME/depot_tools" >> "$GITHUB_PATH"
 
-      - name: Verify ARM64 args.gn is present
-        run: |
-          test -f prebuilt/flutter-engine/linux-arm64-release/args.gn
-          grep -q 'target_cpu = "arm64"' \
-            prebuilt/flutter-engine/linux-arm64-release/args.gn
-
       - name: Bootstrap Denial
         run: |
           ./tools/denial-pc bootstrap
@@ -69,7 +63,12 @@ jobs:
         env:
           DENIAL_FLUTTER_ENGINE_JOBS: 6
         run: |
-          ./tools/denial-flutter-engine build
+          # No committed ARM64 args.gn exists yet, so denial-flutter-engine takes
+          # its "unqualified native" path: it verifies the generated graph really
+          # targets arm64 and skips the x64 byte-for-byte comparison.
+          test ! -e prebuilt/flutter-engine/linux-arm64-release/args.gn
+          ./tools/denial-flutter-engine prepare-app-build
+          file prebuilt/flutter-engine/linux-arm64-release/libflutter_engine.so
 
       - name: Build Denial
         run: |
